@@ -6,6 +6,10 @@ import json
 import numpy as np
 import matplotlib.pyplot as plt
 import os
+import tensorflow as tf
+from tensorflow.keras import layers, models, backend as K
+import tensorflow.compat.v1 as tf
+tf.disable_v2_behavior() # Required for the .meta/.data files
 
 
 def load_primus_dataset(corpus_path: str, label_type: str = "agnostic"):
@@ -65,10 +69,7 @@ def load_primus_dataset(corpus_path: str, label_type: str = "agnostic"):
     return samples
 data = load_primus_dataset(r"Corpus") 
 
-
-
 # VOCABULARY GENERATOR
-
 def build_vocab(dataset):
     """
     Scans labels to build a unique mapping.
@@ -169,18 +170,14 @@ def binarize_image(image):
     )
     return binary
 
-
-
-# Select a random sample from the training set for visualization
 sample_idx = random.randint(0, len(train_data) - 1)
 raw_img, raw_label = train_data[sample_idx]
 
-# Apply binarization
+#binarization
 binary_img = binarize_image(raw_img)
 
-# Plotting the results
-plt.figure(figsize=(12, 5))
 
+plt.figure(figsize=(12, 5))
 plt.subplot(2, 1, 1)
 plt.title(f"Original Training Sample (Index: {sample_idx})")
 plt.imshow(raw_img, cmap="gray")
@@ -194,16 +191,13 @@ plt.axis("off")
 plt.tight_layout()
 plt.show()
 
-# Verify mathematical correctness for the CNN
+
 print(f"Unique pixel values in binary image: {np.unique(binary_img)}")
 print(f"Ink pixels (255): {np.sum(binary_img == 255)}")
 print(f"Background pixels (0): {np.sum(binary_img == 0)}")
 
 
 def remove_staff_lines(binary_img):
-    """
-    Identifies horizontal staff lines and removes them, then repairs broken stems.
-    """
     h, w = binary_img.shape
 
     # Create a long, thin horizontal kernel to detect staff lines
@@ -254,19 +248,8 @@ plt.axis("off")
 plt.tight_layout()
 plt.show()
 
-import cv2
-import numpy as np
-import matplotlib.pyplot as plt
-
-# ──────────────────────────────────────────────────────────────────────────────
-# 1. THE FUNCTIONS (UNCHANGED LOGIC, RECALIBRATED FOR PIPELINE)
-# ──────────────────────────────────────────────────────────────────────────────
 
 def detect_staff_rows(binary_img, min_row_height=30, gap_threshold=10):
-    """
-    Finds horizontal bands that contain musical content (staff rows) 
-    using horizontal pixel projection.
-    """
     row_sums = np.sum(binary_img, axis=1)
     active = row_sums > 0 # Rows that have any 'ink' (255)
 
@@ -299,9 +282,6 @@ def detect_staff_rows(binary_img, min_row_height=30, gap_threshold=10):
     return bands
 
 def crop_melody_strips(binary_img, padding=5):
-    """
-    Crops each detected staff row into a tight horizontal strip.
-    """
     h, w = binary_img.shape
     bands = detect_staff_rows(binary_img)
 
@@ -319,11 +299,6 @@ def crop_melody_strips(binary_img, padding=5):
 
     return strips, offsets
 
-# ──────────────────────────────────────────────────────────────────────────────
-# 2. APPLICATION ON THE PREVIOUSLY PROCESSED IMAGE
-# ──────────────────────────────────────────────────────────────────────────────
-
-# We use 'no_staff_img' created in Phase 2.2
 strips, offsets = crop_melody_strips(no_staff_img)
 
 print(f"Step 2.3 Results:")
@@ -332,9 +307,6 @@ print(f"   - Staff rows detected: {len(strips)}")
 for i, (strip, (x0, y0)) in enumerate(zip(strips, offsets)):
     print(f"   - Strip {i}: shape={strip.shape} | global offset=(y:{y0})")
 
-# ──────────────────────────────────────────────────────────────────────────────
-# 3. VISUALIZATION
-# ──────────────────────────────────────────────────────────────────────────────
 
 fig, axes = plt.subplots(len(strips), 1, figsize=(15, 3 * len(strips)), squeeze=False)
 
@@ -347,22 +319,13 @@ plt.tight_layout()
 plt.show() 
 
 
-# ============================================================
-# PHASE 3: TENSOR PREPARATION (Based on Paper Page 9/10)
-# ============================================================
+#TENSOR PREPARATION 
 
-# The paper uses 128px height. 
-# We'll use 1024 as a standard wide width to accommodate most PrIMuS staves.
+# We have used 1024 as a standard wide width to accommodate most PrIMuS staves.
 TARGET_HEIGHT = 128 
 TARGET_WIDTH = 1024 
 
 def prepare_tensor_for_model(strip_img):
-    """
-    Implements the rescaling logic from Section 'Implementation Details' (Page 9).
-    1. Rescale to 128px height.
-    2. Maintain aspect ratio.
-    3. Normalize pixels to [0, 1].
-    """
     h, w = strip_img.shape
     
     # 1. Calculate new width maintaining aspect ratio
@@ -381,11 +344,7 @@ def prepare_tensor_for_model(strip_img):
     
     return canvas.reshape(TARGET_HEIGHT, TARGET_WIDTH, 1)
 
-# ──────────────────────────────────────────────────────────────────────────────
-# Visualizing the Next Step
-# ──────────────────────────────────────────────────────────────────────────────
 
-# Take the first strip from your previous step (Phase 2.3)
 demo_strip = strips[0]
 model_input_tensor = prepare_tensor_for_model(demo_strip)
 
@@ -398,15 +357,7 @@ plt.title("Phase 3 Result: Rescaled & Normalized Tensor (Ready for CRNN)")
 plt.axis('off')
 plt.show()
 
-
-import tensorflow as tf
-from tensorflow.keras import layers, models, backend as K
-import numpy as np
-
-# ============================================================
-# PHASE 4.1: BUILD CRNN ARCHITECTURE (Based on Table 3)
-# ============================================================
-
+# BUILDING CRNN ARCHITECTURE 
 def build_crnn_model(input_shape=(128, 1024, 1), vocab_size=NUM_CLASSES):
     """
     CRNN Architecture:
@@ -461,9 +412,6 @@ def build_crnn_model(input_shape=(128, 1024, 1), vocab_size=NUM_CLASSES):
 base_model = build_crnn_model(input_shape=(128, 1024, 1), vocab_size=NUM_CLASSES)
 base_model.summary()
 
-# ============================================================
-# PHASE 4.2: CTC TRAINING WRAPPER
-# ============================================================
 MAX_LABEL_LEN = 100   # same as used in padding
 # CTC Loss Function
 def ctc_loss_lambda(args):
@@ -475,26 +423,18 @@ labels = layers.Input(name="the_labels", shape=(MAX_LABEL_LEN,), dtype='int32')
 input_length = layers.Input(name='input_length', shape=(1,), dtype='int64')
 label_length = layers.Input(name='label_length', shape=(1,), dtype='int64')
 
-# Lambda layer for loss
 loss_out = layers.Lambda(ctc_loss_lambda, output_shape=(1,), name='ctc_loss')(
     [base_model.output, labels, input_length, label_length]
 )
-
-# Full training model
 train_model = models.Model(
     inputs=[base_model.input, labels, input_length, label_length], 
     outputs=loss_out
 )
-
-# Compile with dummy loss (since the Lambda layer already calculates the loss)
 train_model.compile(
     optimizer=tf.keras.optimizers.Adam(learning_rate=0.001),
     loss={'ctc_loss': lambda y_true, y_pred: y_pred}
 )
 
-# ============================================================
-# PHASE 4.3: INFERENCE & DECODING
-# ============================================================
 
 def decode_prediction(pred_softmax):
     """
@@ -511,12 +451,8 @@ def decode_prediction(pred_softmax):
     
     return result
 
-# ============================================================
-# 🔍 VISUALIZATION: WHAT THE CNN SEES
-# ============================================================
 
 def visualize_cnn_features(model, sample_img):
-    # Create a model that outputs the first Conv2D layer
     feature_extractor = models.Model(inputs=model.input, outputs=model.layers[1].output)
     features = feature_extractor.predict(sample_img.reshape(1, 128, 1024, 1))
     
@@ -527,9 +463,6 @@ def visualize_cnn_features(model, sample_img):
         plt.axis('off')
     plt.suptitle("CNN Visual Features (First Layer)")
     plt.show()
-# ============================================================
-# BUILD TRAIN TENSOR SET (FIX)
-# ============================================================
 
 X_train_final = []
 
@@ -561,16 +494,7 @@ print(f"Training tensor shape: {X_train_final.shape}")
 # Run visualization on a training sample
 visualize_cnn_features(base_model, X_train_final[0])
 
-import tensorflow.compat.v1 as tf
-tf.disable_v2_behavior() # Required for the .meta/.data files
-import numpy as np
-import cv2
-import matplotlib.pyplot as plt
-
-# ============================================================
-# 1. LOAD THE OFFICIAL VOCABULARY (FIXED)
-# ============================================================
-
+# LOAD THE VOCABULARY 
 VOCAB_FILE_PATH = "vocabulary_agnostic.txt" 
 
 def load_vocab_from_file(path):
@@ -596,69 +520,47 @@ idx_to_token[BLANK_INDEX] = "<BLANK>"
 print(f"✅ Vocabulary loaded: {len(agnostic_vocab)} symbols.")
 print(f"Index 65 corresponds to: {idx_to_token.get(65, 'STILL MISSING!')}")
 
-# ============================================================
-# 2. LOAD THE PRE-TRAINED TENSORFLOW V1 MODEL
-# ============================================
-# Since you have .meta, .index, and .data files, we use the TF1 Saver.
-
-# Clear the graph and start a session
 tf.reset_default_graph()
 sess = tf.InteractiveSession()
 
-# Path to your weights (prefix only, as shown in your folder screenshot)
 WEIGHTS_PATH = "agnostic_model" 
 
 print("Loading pre-trained weights...")
-# 1. Import the graph (the skeleton)
+
 saver = tf.train.import_meta_graph(f"{WEIGHTS_PATH}.meta")
-# 2. Restore the values (the brain)
 saver.restore(sess, WEIGHTS_PATH)
 
-# Identify the input and output tensors from the saved graph
 graph = tf.get_default_graph()
 input_tensor = graph.get_tensor_by_name("model_input:0")
 seq_len_tensor = graph.get_tensor_by_name("seq_lengths:0")
 rnn_keep_prob = graph.get_tensor_by_name("keep_prob:0")
 logits = tf.get_collection("logits")[0]
 
-# Define the decoder within the graph
 decoded, _ = tf.nn.ctc_greedy_decoder(logits, seq_len_tensor)
 
-print("✅ Model fully restored and ready for prediction.")
+print(" Model fully restored and ready for prediction.")
 
-# ============================================================
-# 3. PREDICTION FUNCTION
-# ============================================================
 
 def predict_music(image_path):
     img = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
     if img is None: raise ValueError(f"Image not found at {image_path}")
     
-    # 1. Resize/Normalize (128px height)
     h, w = img.shape
     new_w = int(128 * w / h)
     img_resized = cv2.resize(img, (new_w, 128))
     img_norm = (255. - img_resized) / 255.
     img_input = img_norm.reshape(1, 128, new_w, 1)
     
-    # 2. Sequence Length (Width / 16 reduction)
     seq_len = [img_input.shape[2] / 16]
-
-    # 3. Run Inference
     prediction = sess.run(decoded, feed_dict={
         input_tensor: img_input,
         seq_len_tensor: seq_len,
         rnn_keep_prob: 1.0 
     })
-
-    # 4. Extract IDs from SparseTensor
     indices = prediction[0].indices
     values = prediction[0].values
-    
-    # Extract IDs for the first image in batch
     predicted_ids = [val for idx, val in zip(indices, values) if idx[0] == 0]
     
-    # 5. Map IDs to strings with SAFETY check
     predicted_tokens = []
     for tid in predicted_ids:
         clean_id = int(tid) # Convert np.int64 to Python int
@@ -668,9 +570,6 @@ def predict_music(image_path):
             predicted_tokens.append(f"[UNKNOWN_ID_{clean_id}]")
     
     return predicted_tokens
-# ============================================================
-# 4. TEST ON A REAL IMAGE
-# ============================================================
 
 TEST_IMAGE_PATH = "Corpus/000051652-1_2_1/000051652-1_2_1.png" # Example path
 result = predict_music(TEST_IMAGE_PATH)
@@ -678,7 +577,6 @@ result = predict_music(TEST_IMAGE_PATH)
 print("\n--- AI TRANSCRIPTION RESULT ---")
 print(" | ".join(result))
 
-# Visualization
 test_img = cv2.imread(TEST_IMAGE_PATH)
 plt.figure(figsize=(15, 3))
 plt.imshow(test_img)
@@ -686,11 +584,6 @@ plt.title("Transcribed Music Staff")
 plt.axis('off')
 plt.show()
 
-import numpy as np
-
-# ============================================================
-# 1. LEVENSHTEIN DISTANCE FUNCTION
-# ============================================================
 def edit_distance(s1, s2):
     """Calculates edit distance between two sequences (lists or strings)."""
     if len(s1) < len(s2):
@@ -709,9 +602,6 @@ def edit_distance(s1, s2):
         previous_row = current_row
     return previous_row[-1]
 
-# ============================================================
-# 2. EVALUATION LOOP
-# ============================================================
 
 def run_full_evaluation(test_samples):
     total_ser_dist = 0
@@ -723,14 +613,14 @@ def run_full_evaluation(test_samples):
     print(f"Starting evaluation on {num_eval} samples...")
 
     for i, (img, true_labels) in enumerate(test_samples):
-        # 1. Image preprocessing (consistent with our predict function)
+        
         h, w = img.shape
         new_w = int(128 * w / h)
         img_resized = cv2.resize(img, (new_w, 128))
         img_norm = (255. - img_resized) / 255.
         img_input = img_norm.reshape(1, 128, new_w, 1)
         
-        # 2. Prediction
+        
         seq_len = [img_input.shape[2] / 16]
         prediction = sess.run(decoded, feed_dict={
             input_tensor: img_input,
@@ -738,18 +628,15 @@ def run_full_evaluation(test_samples):
             rnn_keep_prob: 1.0 
         })
         
-        # 3. Process Sparse Result
         indices = prediction[0].indices
         values = prediction[0].values
         pred_ids = [int(val) for idx, val in zip(indices, values) if idx[0] == 0]
         pred_labels = [idx_to_token.get(tid, "") for tid in pred_ids]
 
-        # --- SER (Symbol Level) ---
         s_dist = edit_distance(true_labels, pred_labels)
         total_ser_dist += s_dist
         total_symbols += len(true_labels)
 
-        # --- CER (Character Level) ---
         true_str = "".join(true_labels)
         pred_str = "".join(pred_labels)
         c_dist = edit_distance(list(true_str), list(pred_str))
@@ -759,23 +646,18 @@ def run_full_evaluation(test_samples):
         if i % 10 == 0:
             print(f"Processed {i}/{num_eval}...")
 
-    # Final calculations
     ser = (total_ser_dist / total_symbols) * 100
     cer = (total_cer_dist / total_chars) * 100
     
     return ser, cer
 
-# ============================================================
-# 3. RUN EVALUATION
-# ============================================================
 
-# Use the 'val_data' split we created earlier (e.g., 50 samples)
 test_subset = val_data[:50] 
 
 ser_result, cer_result = run_full_evaluation(test_subset)
 
 print("\n" + "="*45)
-print(f"📊 FINAL SYSTEM METRICS (Pre-trained Model)")
+print(f"FINAL SYSTEM METRICS (Pre-trained Model)")
 print("="*45)
 print(f"SER (Symbol Error Rate):    {ser_result:.2f}%")
 print(f"LER (Label Error Rate):     {ser_result:.2f}%")
@@ -787,19 +669,13 @@ print("Interpretation: 0% is perfect. Anything < 5% is excellent.")
 import random
 
 def predict_and_compare(sample_data, model_session, idx_to_token):
-    """
-    sample_data: a single tuple (image_array, true_label_list)
-    """
     raw_img, true_labels = sample_data
-    
-    # 1. Preprocess the image (128px height, aspect ratio preserved)
     h, w = raw_img.shape
     new_w = int(128 * w / h)
     img_resized = cv2.resize(raw_img, (new_w, 128))
     img_norm = (255. - img_resized) / 255.
     img_input = img_norm.reshape(1, 128, new_w, 1)
-    
-    # 2. Run AI Inference
+   
     seq_len = [img_input.shape[2] / 16]
     prediction = model_session.run(decoded, feed_dict={
         input_tensor: img_input,
@@ -807,23 +683,18 @@ def predict_and_compare(sample_data, model_session, idx_to_token):
         rnn_keep_prob: 1.0 
     })
     
-    # 3. Decode result
     indices = prediction[0].indices
     values = prediction[0].values
     pred_ids = [int(val) for idx, val in zip(indices, values) if idx[0] == 0]
     pred_labels = [idx_to_token.get(tid, f"UNK_{tid}") for tid in pred_ids]
 
-    # 4. Calculate Accuracy (1 - SER)
-    # Using the edit_distance function defined in the previous step
     distance = edit_distance(true_labels, pred_labels)
-    # Accuracy is based on the number of correct symbols vs total symbols
-    # Note: Accuracy can be negative if there are more errors than notes, so we clamp it at 0.
+
     sample_ser = distance / max(len(true_labels), 1)
     accuracy = max(0, (1 - sample_ser) * 100)
 
-    # 5. Print Results
     print("\n" + "="*60)
-    print("🎼 INDIVIDUAL IMAGE PREDICTION")
+    print("INDIVIDUAL IMAGE PREDICTION")
     print("="*60)
     print(f"ACTUAL NOTES:    {' | '.join(true_labels)}")
     print("-" * 60)
@@ -833,21 +704,16 @@ def predict_and_compare(sample_data, model_session, idx_to_token):
     print(f"SAMPLE ACCURACY: {accuracy:.2f}%")
     print("="*60)
 
-    # 6. Show the image
     plt.figure(figsize=(15, 3))
     plt.imshow(raw_img, cmap='gray')
     plt.title(f"Processed Image (Accuracy: {accuracy:.2f}%)")
     plt.axis('off')
     plt.show()
 
-# --- EXECUTION ---
-# Pick a random sample from your validation data
 random_sample = random.choice(val_data)
 predict_and_compare(random_sample, sess, idx_to_token)
 
-# ============================================================
-# REQUIRED HELPERS — copied here so ablation cell is self-contained
-# ============================================================
+
 
 def segment_music_symbols(img):
     debug = {}
@@ -910,12 +776,9 @@ def crop_and_pair(original_img, boxes, label_seq):
 
 
 def encode_label(label_seq, token_to_idx):
-    # safely handle vocabs built with or without explicit <UNK>
     unk_id = token_to_idx.get("<UNK>", token_to_idx.get("<BLANK>", 0))
     return [token_to_idx.get(sym, unk_id) for sym in label_seq]
 
-# !pip install miditoolkit 
-# or use a simple mapping
 
 def export_to_midi(pred_tokens, filename="output.mid"):
     """
@@ -937,8 +800,6 @@ def export_to_midi(pred_tokens, filename="output.mid"):
             
     print(f"Generated MIDI Sequence: {midi_sequence}")
     return midi_sequence
-
-# Example use:
 my_music = export_to_midi(result)
 
 '''def plot_learning_curves(history):
