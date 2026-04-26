@@ -1,6 +1,6 @@
 # Optical Music Recognition (OMR) using CRNN + CTC
 
-**Group Members:** [Add your group member names here]
+**Group Members:** Dhwaj Jain & Prakriti
 
 ---
 
