@@ -1,6 +1,6 @@
 # Optical Music Recognition (OMR) using CRNN + CTC
 
-**Group Members:** Dhwaj Jain & Prakriti
+**Group Members:** [Add your group member names here]
 
 ---
 
@@ -21,11 +21,17 @@ Install the following extensions from the VS Code Extensions panel (Ctrl + Shift
 
 ### Environment Creation and Installation
 
+This project requires Python 3.10 specifically. TensorFlow 2.10.1 does not install or run correctly on Python 3.11 or above. Before running the commands below, ensure Python 3.10 is installed on your machine. You can download it from https://www.python.org/downloads/release/python-3100/.
+
 Open the VS Code Terminal (Ctrl + ~) and run these commands in order:
 
 ```bash
-# 1. Create a virtual environment named '.venv'
-python -m venv .venv
+# 1. Create a virtual environment using Python 3.10 explicitly
+# On Windows (adjust path if your Python 3.10 install location differs):
+py -3.10 -m venv .venv
+
+# On Mac/Linux:
+python3.10 -m venv .venv
 
 # 2. Activate the environment
 # On Windows:
@@ -40,7 +46,7 @@ python -m pip install --upgrade pip
 pip install tensorflow==2.10.1 opencv-python numpy matplotlib pandas scikit-learn
 ```
 
-> Note on TensorFlow: Version 2.10.1 is required to maintain compatibility with the pre-trained `.meta` weight files and the `tf.compat.v1` behavior used in this project. Newer versions (2.15+) have removed compatibility layers needed for these 2018 weight files.
+> Note on TensorFlow: Version 2.10.1 pinned to Python 3.10 is required to maintain compatibility with the pre-trained `.meta` weight files and the `tf.compat.v1` behavior used in this project. Newer versions of TensorFlow (2.15+) and newer versions of Python (3.11+) have both removed compatibility layers needed for these weight files.
 
 ---
 
@@ -74,17 +80,17 @@ Important notes:
 
 ## Data Access
 
-This project uses the PrIMuS (Printed Images of Music Staves) dataset, publicly available from the University of Alicante.
+This project uses the PrIMuS (Printed Images of Music Staves) dataset, publicly available from the University of Alicante:
 
 - Official page: https://grfia.dlsi.ua.es/primus/
 
-After downloading, extract the corpus into the `Corpus/` folder as shown in the file structure above. Each subfolder corresponds to one music staff sample and must contain both a `.png` image and a `.agnostic` label file.
+Due to the size of the full dataset, 860 sample images have been included directly in this repository inside the `Corpus/` folder as a representative subset. This is sufficient to run the pipeline and evaluate the model. If you wish to train or evaluate on the full corpus, download the complete dataset from the link above and extract it into the `Corpus/` folder, replacing the sample contents.
 
 ---
 
 ## Running the Project
 
-1. Select your interpreter: Press Ctrl + Shift + P, type "Python: Select Interpreter", and choose the one labeled `.venv`.
+1. Select your interpreter: Press Ctrl + Shift + P, type "Python: Select Interpreter", and choose the one labeled `.venv` with Python 3.10.
 
 2. Run the script from the terminal:
 
@@ -121,6 +127,7 @@ The following steps remain to complete or further optimize this project:
 ## Troubleshooting
 
 - `MemoryError`: If your machine has less than 8GB of RAM, locate the `sample_limit` variable in `main.py` and set it to `100`.
-- Tensors not found: Confirm you are using TensorFlow 2.10.x exactly. Versions 2.15 and above have removed the `tf.compat.v1` layers required to load the pre-trained weight files.
+- Tensors not found: Confirm you are using TensorFlow 2.10.x on Python 3.10 exactly. Versions 2.15 and above, or Python 3.11 and above, have removed the `tf.compat.v1` layers required to load the pre-trained weight files.
 - `KeyError` on vocabulary: Ensure `vocabulary_agnostic.txt` is the complete file from the PrIMuS authors. Any missing symbols will cause a key lookup failure during encoding.
-- Wrong interpreter selected: If `import tensorflow` fails despite installation, press Ctrl + Shift + P, select "Python: Select Interpreter", and confirm the `.venv` environment is active.
+- Wrong interpreter selected: If `import tensorflow` fails despite installation, press Ctrl + Shift + P, select "Python: Select Interpreter", and confirm the `.venv` environment is active and shows Python 3.10.
+- Wrong Python version in venv: If you accidentally created the venv with the wrong Python version, delete the `.venv` folder and re-run the creation command using `py -3.10` or `python3.10` explicitly.
