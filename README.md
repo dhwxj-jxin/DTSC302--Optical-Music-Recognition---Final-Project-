@@ -43,7 +43,7 @@ source .venv/bin/activate
 python -m pip install --upgrade pip
 
 # 4. Install required libraries
-pip install tensorflow==2.10.1 opencv-python numpy matplotlib pandas scikit-learn
+pip install tensorflow==2.10.1 opencv-python numpy matplotlib pandas scikit-learn rapidfuzz
 ```
 
 > Note on TensorFlow: Version 2.10.1 pinned to Python 3.10 is required to maintain compatibility with the pre-trained `.meta` weight files and the `tf.compat.v1` behavior used in this project. Newer versions of TensorFlow (2.15+) and newer versions of Python (3.11+) have both removed compatibility layers needed for these weight files.
